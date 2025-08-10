@@ -1,7 +1,6 @@
 import os
 from typing import Annotated
 from dotenv import load_dotenv
-from langchain_openai import AzureChatOpenAI
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages

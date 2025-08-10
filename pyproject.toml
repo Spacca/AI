@@ -1,24 +1,17 @@
 [project]
 name = "ai"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "Dario Luzi",email = "luzidario@gmail.com"}
-]
+description = "Some LangGraph Examples"
 readme = "README.md"
-requires-python = ">=3.12,<4.0"
+requires-python = ">=3.11"
 dependencies = [
     "langgraph (>=0.6.4,<0.7.0)",
     "langchain (>=0.3.27,<0.4.0)",
     "langchain-openai (>=0.3.29,<0.4.0)",
-    "python-dotenv (>=1.1.1,<2.0.0)"
+    "python-dotenv (>=1.1.1,<2.0.0)",
 ]
 
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.group.dev.dependencies]
-black = "^25.1.0"
-
+[dependency-groups]
+dev = [
+    "ruff>=0.12.8",
+]

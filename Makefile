@@ -4,4 +4,4 @@ run:
 
 .PHONY: install
 install:
-	poetry install --no-root
+	poetry install
