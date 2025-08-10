@@ -1,5 +1,10 @@
 # How to Run
 
+To setup everything, format and lint (you should do this often and in case of git hook failures):
+```bash
+make all
+```
+
 To run the simple agent example:
 
 ```bash
