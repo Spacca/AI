@@ -11,9 +11,12 @@ dependencies = [
     "python-dotenv (>=1.1.1,<2.0.0)",
     "fastmcp>=2.11.2",
     "aiohttp>=3.12.15",
+    "langchain-mcp-adapters>=0.1.9",
+    "ipython>=9.4.0",
 ]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.3.0",
     "ruff>=0.12.8",
 ]
