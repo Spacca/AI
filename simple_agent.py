@@ -43,6 +43,4 @@ def stream_graph_updates(user_input: str):
             
             
 user_input = input("User: ")
-if user_input.lower() in ["quit", "exit", "q"]:
-    print("Goodbye!")
 stream_graph_updates(user_input)
