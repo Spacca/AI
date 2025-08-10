@@ -1,6 +1,6 @@
 .PHONY: run
 run:
-	poetry run python human_input.py
+	poetry run python simple_agent.py
 
 .PHONY: install
 install:
