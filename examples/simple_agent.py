@@ -8,7 +8,6 @@ from langchain.chat_models import init_chat_model
 
 load_dotenv()
 
-
 llm = init_chat_model(
     os.getenv("MODEL"),
     azure_deployment=os.getenv("DEPLOYMENT_NAME"),
