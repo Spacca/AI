@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Dict
 from fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -9,11 +8,7 @@ from datetime import datetime
 load_dotenv()
 
 # Initialize FastMCP
-mcp = FastMCP("mcp-weather")
-
-# Cache configuration
-CACHE_DIR = Path.home() / ".cache" / "weather"
-LOCATION_CACHE_FILE = CACHE_DIR / "location_cache.json"
+mcp = FastMCP("mcps")
 
 
 @mcp.tool()

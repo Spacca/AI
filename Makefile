@@ -12,7 +12,7 @@ format:
 
 .PHONY: lint
 lint:
-	uv run ruff check .
+	uv run ruff check . --fix
 
 .PHONY: all
 all: sync pre-commit format lint

@@ -47,7 +47,7 @@ async def main():
     async def chatbot(state: State):
         system_prompt = {
             "role": "system",
-            "content": "You are a helpful weather assistant. Prefer the usage of tools to answer questions (i.e. use a tool to find out coordinates of cities)",
+            "content": "You are an helpful AI assistant. Keep the response short and concise. Prefer the usage of tools to answer questions (i.e. use a tool to find out coordinates of cities).",
         }
         messages = [system_prompt] + state["messages"]
         return {"messages": [await llm.ainvoke(messages)]}
