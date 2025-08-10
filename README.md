@@ -54,16 +54,8 @@ Tool response: {"time":["2025-08-10T00:00","2025-08-10T01:00","2025-08-10T02:00"
 Tool call: current_date_time with args: {}
 
 ======================================== New Event ========================================
-Tool response: {"date":"2025-08-10","time":"19:20:27"}
+Tool response: {"date":"2025-08-10","time":"19:47:11"}
 
 ======================================== New Event ========================================
-Message content: Zurich now (local time 2025-08-10 19:20): about 26.7°C (latest hourly data at 19:00).
-
-Evening forecast:
-- 20:00: ~24.7°C
-- 21:00: ~23.5°C
-- 22:00: ~22.7°C
-- 23:00: ~21.8°C
-
-Want this in Fahrenheit or a more detailed forecast for the next 24 hours?
+Message content: Current temperature in Zurich is 24.0 C (at 19:47).
 ```
