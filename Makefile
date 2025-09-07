@@ -17,6 +17,10 @@ lint:
 .PHONY: all
 all: sync pre-commit format lint
 
+.PHONY: run
+run:
+	uv run main.py
+
 .PHONY: simple-agent
 run-simple-agent:
 	uv run examples/langgraph/simple_agent.py
