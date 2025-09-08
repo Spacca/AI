@@ -5,6 +5,7 @@ import asyncio
 import time
 from typing import Annotated
 from dotenv import load_dotenv
+import openai
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -193,12 +194,16 @@ async def main():
     stream = graph.astream({"messages": []}, config=config)
     # Run the chatbot
     while True:
-        async for event in stream:
-            for key, value in event.items():
-                logger.debug(f"Event: {key} -> {value}")
-        human_command_str = input("You: ")
-        human_command = Command(resume={"data": human_command_str})
-        stream = graph.astream(human_command, config=config)
+        try:
+            async for event in stream:
+                for key, value in event.items():
+                    logger.debug(f"Event: {key} -> {value}")
+            human_command_str = input("You: ")
+            human_command = Command(resume={"data": human_command_str})
+            stream = graph.astream(human_command, config=config)
+        except openai.BadRequestError as e:
+            logger.error(f"OpenAI API error: {e}")
+            await do_speak("Mi dispiace, probabilmente il content filter è scattato. Puoi riformulare la tua richiesta?")
 
 
 if __name__ == "__main__":
