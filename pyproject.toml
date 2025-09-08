@@ -12,10 +12,8 @@ dependencies = [
     "fastmcp>=2.11.2",
     "aiohttp>=3.12.15",
     "langchain-mcp-adapters>=0.1.9",
-    "ipython>=9.4.0",
     "pydub>=0.25.1",
     "audioop-lts>=0.2.2",
-    "speechrecognition>=3.14.3",
     "pyaudio>=0.2.14",
 ]
 

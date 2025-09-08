@@ -15,17 +15,21 @@ from pydub import AudioSegment
 from pydub.playback import play
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command, interrupt
-
+import logging
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 PERSONA = """
 Il tuo nome è Eve. 
 Sei un assistente virtuale che fa parte della famiglia. 
 Rispondi sempre in modo amichevole, spontaneo e informale. 
+Usa risposte brevi e concise, 1 o 2 frasi al massimo.
 Evita risposte troppo tecniche.
-Evita risposte troppo robotiche.
-Evita risposte troppo lunghe.
+Evita risposte troppo robotiche..
 Evita di presentarti come assistente virtuale.
 Evita di presentare le tue funzioni.
 Ama fare complimenti sottili, usa spesso battute spiritose e domande intriganti. 
@@ -53,31 +57,34 @@ client = AsyncAzureOpenAI(
 
 
 async def do_speak(input: str):
-    start = time.time()
-    print("[PROFILE] speak: start")
-    async with client.audio.speech.with_streaming_response.create(
-        model="gpt-4o-mini-tts",
-        voice="sage",
-        input=input,
-        instructions=VOICE,
-        response_format="pcm",
-        speed=1.0,
-    ) as response:
-        audio_data = b""
-        async for chunk in response.iter_bytes(chunk_size=128000):
-            audio_data += chunk
-        mid = time.time()
-        print(f"[PROFILE] speak: audio generated, elapsed: {mid - start:.3f}s")
-        audio = AudioSegment.from_file(
-            io.BytesIO(audio_data),
-            format="pcm",
-            sample_width=2,
-            frame_rate=24000,
-            channels=1,
-        )
-        play(audio)
-    end = time.time()
-    print(f"[PROFILE] speak: end, elapsed: {end - start:.3f}s")
+    try:
+        start = time.time()
+        logger.debug("[PROFILE] speak: start")
+        async with client.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts",
+            voice="sage",
+            input=input,
+            instructions=VOICE,
+            response_format="pcm",
+            speed=1.0,
+        ) as response:
+            audio_data = b""
+            async for chunk in response.iter_bytes(chunk_size=128000):
+                audio_data += chunk
+            mid = time.time()
+            logger.debug(f"[PROFILE] speak: audio generated, elapsed: {mid - start:.3f}s")
+            audio = AudioSegment.from_file(
+                io.BytesIO(audio_data),
+                format="pcm",
+                sample_width=2,
+                frame_rate=24000,
+                channels=1,
+            )
+            play(audio)
+        end = time.time()
+        logger.debug(f"[PROFILE] speak: end, elapsed: {end - start:.3f}s")
+    except Exception as e:
+        print(f"Error in do_speak: {e}")
 
 
 llm = init_chat_model(
@@ -86,8 +93,8 @@ llm = init_chat_model(
     azure_endpoint=os.getenv("ENDPOINT"),
     api_key=os.getenv("API_KEY"),
     api_version=os.getenv("API_VERSION"),
-    max_tokens=3000,
-    temperature=0.9,
+    temperature=0.7,
+    reasoning_effort="minimal",
 )
 
 # First of all create a MCP client and load the tools
@@ -117,7 +124,7 @@ tools = ToolNode(mcp_tools)
 
 async def chatbot(state: State):
     start = time.time()
-    print("[PROFILE] chatbot: start")
+    logger.debug("[PROFILE] chatbot: start")
     oggi = datetime.now()
     data_formattata = oggi.strftime("%d/%m/%Y %H:%M:%S")
     persona = f"Oggi è il {data_formattata}\n{PERSONA}"
@@ -128,7 +135,7 @@ async def chatbot(state: State):
     messages = [system_prompt] + state["messages"] + [state["input"]]
     result = {"messages": [await llm.ainvoke(messages)]}
     end = time.time()
-    print(f"[PROFILE] chatbot: end, elapsed: {end - start:.3f}s")
+    logger.debug(f"[PROFILE] chatbot: end, elapsed: {end - start:.3f}s")
     return result
 
 
@@ -178,16 +185,17 @@ graph_builder.add_conditional_edges(
 graph_builder.add_edge("tools", "chatbot")
 graph = graph_builder.compile(checkpointer=InMemorySaver())
 
+graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
 async def main():
     config = {"configurable": {"thread_id": "1"}}
-    print("[PROFILE] main: start")
+    logger.debug("[PROFILE] main: start")
     stream = graph.astream({"messages": []}, config=config)
     # Run the chatbot
     while True:
         async for event in stream:
             for key, value in event.items():
-                print(f"Event: {key} -> {value}")
+                logger.debug(f"Event: {key} -> {value}")
         human_command_str = input("You: ")
         human_command = Command(resume={"data": human_command_str})
         stream = graph.astream(human_command, config=config)
