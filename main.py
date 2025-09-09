@@ -17,15 +17,20 @@ from pydub.playback import play
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command, interrupt
 import logging
+from langchain_community.tools import BraveSearch
 
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+
 logger = logging.getLogger(__name__)
 
 PERSONA = """
 <style>
+When asked about information, always use tools to search the web for up-to-date information.
 Avoid long answer.
 Avoid overly technical answers.
 Avoid robotic responses.
@@ -57,7 +62,7 @@ Pronunciation: Clear and precise, with an emphasis on storytelling, ensuring the
 
 client = AsyncAzureOpenAI(
     azure_endpoint=os.getenv("TTS_ENDPOINT"),
-    api_key=os.getenv("TTS_KEY"),
+    api_key=os.getenv("API_KEY"),
     api_version="2025-03-01-preview",
 )
 
@@ -65,7 +70,7 @@ client = AsyncAzureOpenAI(
 async def do_speak(input: str):
     try:
         start = time.time()
-        logger.debug("[PROFILE] speak: start")
+        logger.info("[PROFILE] speak: start")
         async with client.audio.speech.with_streaming_response.create(
             model="gpt-4o-mini-tts",
             voice="sage",
@@ -78,7 +83,9 @@ async def do_speak(input: str):
             async for chunk in response.iter_bytes(chunk_size=128000):
                 audio_data += chunk
             mid = time.time()
-            logger.debug(f"[PROFILE] speak: audio generated, elapsed: {mid - start:.3f}s")
+            logger.info(
+                f"[PROFILE] speak: audio generated, elapsed: {mid - start:.3f}s"
+            )
             audio = AudioSegment.from_file(
                 io.BytesIO(audio_data),
                 format="pcm",
@@ -88,7 +95,7 @@ async def do_speak(input: str):
             )
             play(audio)
         end = time.time()
-        logger.debug(f"[PROFILE] speak: end, elapsed: {end - start:.3f}s")
+        logger.info(f"[PROFILE] speak: end, elapsed: {end - start:.3f}s")
     except Exception as e:
         print(f"Error in do_speak: {e}")
 
@@ -103,17 +110,7 @@ llm = init_chat_model(
     reasoning_effort="minimal",
 )
 
-# First of all create a MCP client and load the tools
-# client = MultiServerMCPClient(
-#    {
-#        "temperature": {
-#            "url": "http://127.0.0.1:8000/mcp/",
-#            "transport": "streamable_http",
-#        }
-#    }
-# )
-# mcp_tools = await client.get_tools()
-mcp_tools = []
+mcp_tools = [BraveSearch()]
 
 llm = llm.bind_tools(mcp_tools)
 
@@ -130,7 +127,7 @@ tools = ToolNode(mcp_tools)
 
 async def chatbot(state: State):
     start = time.time()
-    logger.debug("[PROFILE] chatbot: start")
+    logger.info("[PROFILE] chatbot: start")
     oggi = datetime.now()
     data_formattata = oggi.strftime("%d/%m/%Y %H:%M:%S")
     persona = f"Oggi è il {data_formattata}\n{PERSONA}"
@@ -141,7 +138,7 @@ async def chatbot(state: State):
     messages = [system_prompt] + state["messages"] + [state["input"]]
     result = {"messages": [await llm.ainvoke(messages)]}
     end = time.time()
-    logger.debug(f"[PROFILE] chatbot: end, elapsed: {end - start:.3f}s")
+    logger.info(f"[PROFILE] chatbot: end, elapsed: {end - start:.3f}s")
     return result
 
 
@@ -163,7 +160,9 @@ class ShouldEnd(TypedDict):
 async def should_end(state: State):
     system_prompt = """Sei un assistente che decide se terminare la conversazione. Se l'ultimo messaggio della conversazione è un saluto di chiusura, rispondi con "true", altrimenti rispondi con "false"."""
     structured_llm = llm.with_structured_output(ShouldEnd)
-    should_end_response = await structured_llm.ainvoke([system_prompt] + [state["messages"][-1]])
+    should_end_response = await structured_llm.ainvoke(
+        [system_prompt] + [state["messages"][-1]]
+    )
     if should_end_response["end"]:
         return "__end__"
     return "human"
@@ -195,20 +194,22 @@ graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
 async def main():
     config = {"configurable": {"thread_id": "1"}}
-    logger.debug("[PROFILE] main: start")
+    logger.info("[PROFILE] main: start")
     stream = graph.astream({"messages": []}, config=config)
     # Run the chatbot
     while True:
         try:
             async for event in stream:
                 for key, value in event.items():
-                    logger.debug(f"Event: {key} -> {value}")
+                    logger.info(f"Event: {key} -> {value}")
             human_command_str = input("You: ")
             human_command = Command(resume={"data": human_command_str})
             stream = graph.astream(human_command, config=config)
         except openai.BadRequestError as e:
             logger.error(f"OpenAI API error: {e}")
-            await do_speak("Mi dispiace, probabilmente il content filter è scattato. Puoi riformulare la tua richiesta?")
+            await do_speak(
+                "Mi dispiace, probabilmente il content filter è scattato. Puoi riformulare la tua richiesta?"
+            )
 
 
 if __name__ == "__main__":

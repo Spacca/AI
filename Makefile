@@ -2,10 +2,6 @@
 sync:
 	uv sync
 
-.PHONY: bootstrap
-pre-commit:
-	uv run pre-commit install
-
 .PHONY: format
 format:
 	uv run ruff format .
@@ -15,7 +11,7 @@ lint:
 	uv run ruff check . --fix
 
 .PHONY: all
-all: sync pre-commit format lint
+all: sync format lint
 
 .PHONY: run
 run:
