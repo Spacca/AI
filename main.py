@@ -283,7 +283,7 @@ async def main():
     logger.info("[PROFILE] main: start")
     # Run the chatbot
     while True:
-        speech = LiveSpeech(keyphrase="ok eve", kws_threshold=1e-10)
+        speech = LiveSpeech(keyphrase="ok eve", kws_threshold=1e-7)
         next(speech.__iter__())
         config = {"configurable": {"thread_id": uuid4().hex}}
         stream = graph.astream({"messages": []}, config=config)
