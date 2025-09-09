@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 BLOCK = 1024
 SAMPLE_RATE = 16000
 CHANNELS = 1
-SILENCE_THRESHOLD = 0.00005
+SILENCE_THRESHOLD = 0.000009
 SILENCE_DURATION = 3  # seconds of silence to stop
 
 PERSONA = """
@@ -119,7 +119,6 @@ def record_until_silence():
         samplerate=SAMPLE_RATE, channels=CHANNELS, blocksize=BLOCK
     ) as stream:
         silence_time = 0
-        user_speaking = False
         play_ping_pydub()
         while True:
             data, _ = stream.read(BLOCK)
@@ -128,12 +127,10 @@ def record_until_silence():
             if volume_norm < SILENCE_THRESHOLD:
                 silence_time += BLOCK / SAMPLE_RATE
             else:
-                user_speaking = True
+                buffer.append(data)
                 silence_time = 0
             if silence_time > SILENCE_DURATION:
                 break
-            if user_speaking:
-                buffer.append(data)
 
     if len(buffer):
         return np.concatenate(buffer, axis=0)
