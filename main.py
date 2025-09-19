@@ -2,7 +2,6 @@ from datetime import datetime
 import io
 import os
 import asyncio
-import time
 from typing import Annotated
 from uuid import uuid4
 from dotenv import load_dotenv
@@ -22,7 +21,6 @@ from pocketsphinx import LiveSpeech
 import requests
 import sounddevice as sd
 import numpy as np
-import tempfile
 import wave
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydub.generators import Sine
@@ -41,7 +39,7 @@ logger = logging.getLogger(__name__)
 BLOCK = 1024
 SAMPLE_RATE = 16000
 CHANNELS = 1
-SILENCE_THRESHOLD = 0.000009
+SILENCE_THRESHOLD = 0.00001
 SILENCE_DURATION = 3  # seconds of silence to stop
 
 PERSONA = """
@@ -100,7 +98,6 @@ tools = ToolNode(mcp_tools)
 
 
 class State(TypedDict):
-    should_end: bool
     messages: Annotated[list, add_messages]
 
 class ShouldEnd(TypedDict):
@@ -112,7 +109,7 @@ def play_ping_pydub(duration_ms: int = 200, freq: int = 1000, gain_db: int = -6)
     play(tone)
 
 def record_until_silence():
-    print("Recording... speak into the mic.")
+    logger.info("Recording... Please speak now.")
     buffer = []
 
     with sd.InputStream(
@@ -123,7 +120,6 @@ def record_until_silence():
         while True:
             data, _ = stream.read(BLOCK)
             volume_norm = np.linalg.norm(data) / SAMPLE_RATE
-            print(f"Volume: {volume_norm:.6f}")
             if volume_norm < SILENCE_THRESHOLD:
                 silence_time += BLOCK / SAMPLE_RATE
             else:
@@ -137,42 +133,34 @@ def record_until_silence():
     return []
 
 
-def save_wav(audio, filename):
-    print(f"Saving audio to {filename}")
-    with wave.open(filename, "wb") as wf:
+def numpy_to_wav(audio) -> io.BytesIO:
+    logger.info("Converting audio to WAV format...")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(2)  # 16-bit
         wf.setframerate(SAMPLE_RATE)
         wf.writeframes((audio * 32767).astype(np.int16).tobytes())
+    buf.seek(0)
+    return buf
 
 
 def transcribe():
+    logger.info("Transcribing audio...")
     audio = record_until_silence()
     if len(audio) == 0:
         return {}
-    
-    tmpfile = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    tmpfile_name = tmpfile.name
-    tmpfile.close()  
-
-    save_wav(audio, tmpfile_name)
-
-    print(f"Audio saved to {tmpfile_name}, sending for transcription...")
-    with open(tmpfile_name, "rb") as f:
-        files = {"file": f}
-        data = {"model": "gpt-4o-mini-transcribe"}
-        headers = {"Authorization": f"Bearer {os.getenv('API_KEY')}"}
-        response = requests.post(
-            os.getenv("STT_ENDPOINT"), headers=headers, data=data, files=files
-        )
-
-    os.unlink(tmpfile_name)  # cleanup
+    buf = numpy_to_wav(audio)
+    files = {"file": ("audio.wav", buf, "audio/wav")}
+    data = {"model": "gpt-4o-mini-transcribe"}
+    headers = {"Authorization": f"Bearer {os.getenv('API_KEY')}"}
+    response = requests.post(os.getenv("STT_ENDPOINT"), headers=headers, data=data, files=files)
     return response.json()
 
 
 async def do_speak(input: str):
+    logger.info(f"Speaking: {input}")
     try:
-        start = time.time()
         logger.info("[PROFILE] speak: start")
         async with client.audio.speech.with_streaming_response.create(
             model="gpt-4o-mini-tts",
@@ -185,10 +173,6 @@ async def do_speak(input: str):
             audio_data = b""
             async for chunk in response.iter_bytes(chunk_size=128000):
                 audio_data += chunk
-            mid = time.time()
-            logger.info(
-                f"[PROFILE] speak: audio generated, elapsed: {mid - start:.3f}s"
-            )
             audio = AudioSegment.from_file(
                 io.BytesIO(audio_data),
                 format="pcm",
@@ -197,56 +181,51 @@ async def do_speak(input: str):
                 channels=1,
             )
             play(audio)
-        end = time.time()
-        logger.info(f"[PROFILE] speak: end, elapsed: {end - start:.3f}s")
     except Exception as e:
         print(f"Error in do_speak: {e}")
 
 
 
 async def chatbot(state: State):
-    start = time.time()
-    logger.info("[PROFILE] chatbot: start")
-    oggi = datetime.now()
-    date = oggi.strftime("%d/%m/%Y %H:%M:%S")
+    logger.info("Entering Eve node")
+    today = datetime.now()
+    date = today.strftime("%d/%m/%Y %H:%M:%S")
     persona_with_date = f"Oggi è il {date}\n{PERSONA}"
     messages = [SystemMessage(content=persona_with_date)] + state["messages"]
-    print("Chatbot messages:", messages)
-    result = {"messages": [await llm.ainvoke(messages)]}
-    end = time.time()
-    logger.info(f"[PROFILE] chatbot: end, elapsed: {end - start:.3f}s")
-    return result
+    return {"messages": [await llm.ainvoke(messages)]}
 
-async def human(state: State):
+async def human(_: State):
+    logger.info("Entering human node...")
     text = transcribe()
+    logger.info(f"Transcription result: {text}")
     if not text:
-        return {
-            "should_end": True,
-        }
-    system_prompt = """
-Determina se terminare la conversazione, rispondi con true se l'utente ha finito la conversazione
-"""
-    structured_llm = llm.with_structured_output(ShouldEnd)
-    should_end_response = await structured_llm.ainvoke(
-        [SystemMessage(content=system_prompt)] + state["messages"] + [HumanMessage(content=text["text"])]
-    )
+        pass
     return {
         "messages": HumanMessage(content=text["text"]),
-        "should_end": should_end_response["end"],
     }
 
-
 async def speak(state: State):
+    logger.info("Entering speak node...")
     message = state["messages"][-1].content
     await do_speak(message)
     return state
 
 async def good_bye(_: State):
+    logger.info("Ending conversation...")
     await do_speak("A presto!")
 
 
 async def should_end(state: State):
-    if state["should_end"]:
+    logger.info("Checking if the conversation should end...")   
+    system_prompt = """
+Determina se terminare la conversazione, rispondi con true se l'utente ha finito la conversazione
+"""
+    structured_llm = llm.with_structured_output(ShouldEnd)
+    should_end_response = await structured_llm.ainvoke(
+        [SystemMessage(content=system_prompt)] + state["messages"]
+    )
+
+    if should_end_response["end"]:
         return "__end__"
     return "chatbot"
 
@@ -277,7 +256,6 @@ graph = graph_builder.compile(checkpointer=InMemorySaver())
 ####graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
 async def main():
-    logger.info("[PROFILE] main: start")
     # Run the chatbot
     while True:
         speech = LiveSpeech(keyphrase="ok eve", kws_threshold=1e-7)
@@ -287,7 +265,7 @@ async def main():
         try:
             async for event in stream:
                 for key, value in event.items():
-                    logger.info(f"Event: {key} -> {value}")
+                    logger.debug(f"Event: {key} -> {value}")
         except openai.BadRequestError as e:
             logger.error(f"OpenAI API error: {e}")
             await do_speak(
